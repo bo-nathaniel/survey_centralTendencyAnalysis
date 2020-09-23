@@ -1,0 +1,712 @@
+---
+title: "Survey Analysis"
+author: "Nathaniel Bozarth"
+date: "9/23/2020"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+---
+```{r include=FALSE}
+
+library(mgsub)
+library(dplyr)
+library(ggplot2)
+library(tinytex)
+library(kableExtra)
+library(knitr)
+library(webshot)
+library(fastDummies)
+library(factoextra)
+library(psych)
+library(tibble)
+library(reshape2)
+library(corrplot)
+```
+
+```{r include=FALSE}
+#define fig size
+knitr::opts_chunk$set(fig.width=10, fig.height=6)
+
+
+#alias "cat 1" to be "cat1". Do the same with cat 2 and #3
+
+#### Input new file paths here
+data <- read.table("/Users/nathanielbozarth/Desktop/data.csv", header=TRUE, sep=",")
+
+```
+
+
+```{r include=FALSE}
+#remove rows with now cat ranking (removes both blanks ans nas)
+data <- subset(data, data$cat1 !="")
+
+```
+
+
+## Introduction
+
+In this R Markdown document I analyze the distribution of answers on a 48-item survey. Each item in the survey contributes to the respondent's score on one or more of ten categories. For the purpose of this analysis, the categories are simply number cat1 - cat10 where "cat" is short for "category". Items utilize either a five or seven point likert scale. Five point scale and seven point scale items are dealt with separately.
+
+The data to be analyzed includes `r format(dim(data)[1], big.mark=',')` records.
+
+
+## Item Analysis
+
+Responses to the survey in question garner highly subjective responses. That is, while one respondent may rate themselves very low on a given item, another, from some absolute measure, identical respondent, may rank themselves very differently. Some respondents may have a tendency to score themselves higher than other respondents in the absence of some absolute measure. An analysis of response patterns may illuminate whether certain items include some social desirability component. (That is, do respondents tend to respond to certain items in a way that conforms with perceived norms of goodness or good socialization?)
+
+By analyzing each item in the survey, this analysis represents one means of identifying whether certain items may need to be re-worded or whether differences are <i>real</i> differences.
+
+```{r include=FALSE}
+
+
+#remove rows with now cat ranking (removes both blanks ans nas)
+data <- subset(data, data$cat1 !="")
+
+dim(data) #info for 10,003 categories
+
+
+summary(as.factor(data$cat1))
+
+
+```
+
+```{r include=FALSE}
+#need to look at distribution for each and every survey qeustion
+#need to generate mean response for every survey question
+#need to determine which questions have greater variance
+
+#no need to put into stdev units once we've established mean
+
+#subset data to just survey question items
+questionScores= subset(data, select=c(q12, q13, q14, q15, 
+                                          q16, q17, q18, q19, q20, q21, q22, q23,
+                                          q24, q25, q26, q27, q28, q29, q30, q31, 
+                                          q32, q33, q34, q35, q36, q37, q38, q39,
+                                          q40, q41, q42, q43, q44, q45, q46, q47, 
+                                          q48, q49, q50, q51, q52, q53, q54, q55,
+                                          q56, q57, q58, q59))
+
+
+
+```
+```{r include=FALSE}
+#get descriptive statistics for all items
+descStats <- as.data.frame(describe(questionScores))
+
+#by getting summary stats on teh summary stats, we establish a global centerpoint
+describe(descStats)
+
+#Problem: by grouping 7 point and enoy questions togethr, we combine two different scales
+#need to create two different subsets, one for 7 point, one for fivePt
+
+sevenPt <- subset(data, select=c(q12, q14, q16, q18, q20, 
+                                          q22, q24, q26, q28, q30, 
+                                          q32, q34, q36, q38, q40, 
+                                          q42, q44, q46, q48, q50, 
+                                          q52, q54, q56, q58))
+
+fivePt <- subset(data, select= c(q13, q15, q17, q19, q21, 
+                                          q23, q25, q27, q29, q31, 
+                                          q33, q35, q37, q39, q41,
+                                          q43, q45, q47, q49, q51, 
+                                          q53, q55, q57, q59))
+
+#questions separated into 5-point scale questions (fivePt) and 7-point (7 point) scale questions
+sevenPtStats <- describe(sevenPt) #q16 and q30 stand out (median != 5 and sd is higher), q28 also has a slightly higher sd, but not different median
+#q18 and q24 have a slightly higher mean than the rest
+sevenPtStats <- as.data.frame(subset(sevenPtStats, select = c(mean, sd)))
+
+#get centerpoint stats
+describe(sevenPtStats)
+#mean of sd = 1.62
+#mean of mean = 4.56
+#mean of median = 4.71
+
+
+fivePtStats<- describe(fivePt) #q17, q29 and q31 have higher sd, q31 has lowest mean, q17 closely behind, q27 has highest mean
+fivePtStats <- as.data.frame(subset(fivePtStats, select = c(mean, sd)))
+
+#get centerpoint stats
+describe(fivePtStats)
+#mean of sd = 1.07
+#mean of mean = 3.45
+#mean of median = 3.42
+
+
+
+
+#want to visualize each question against the the whole group
+#need to reshape data for this
+
+```
+
+
+### Item Distribution Analysis
+
+Before making any transformation to correct for respondent tendency or socially favorable responses, this section gives the as-is distribution for each item, using box and whiskers charts.
+
+
+#### Five Point Item Distribution Analysis
+
+```{r echo=FALSE}
+
+
+#add id row
+fivePt$id <- 1:dim(fivePt)[1]
+
+#make long fivePt data
+fivePtLong <- melt(fivePt, id=c("id"))
+
+
+
+ggplot(fivePtLong, aes(x=variable, y=value)) +
+  geom_boxplot(outlier.colour='#5F6062', outlier.shape=16,
+             outlier.size=2, notch=FALSE, fill='#009DA6', alpha=.1,
+             fatten=3) + 
+  stat_summary(fun.y=mean, colour="#DD4243", geom="point")
+
+```
+
+The above plot shows that on the five point items, respondents are more likely to score items high than low. This is clearly seen by the red dot, which represents the mean for each item. For all questions, the mean is above 2.5, the midpoint on the likert scale. 
+
+The following questions skew especially high: 
+<ul>
+  <li>q27</li>
+  <li>q35</li>
+  <li>q43</li>
+</ul>
+
+These items code for cat5, cat5, and cat7, respectively. Both cat5 and cat7 very frequently rank highest among respondent composite scores (first most frequent and second most frequent, respectively). cat5, however, occurs much less frequently in respondents' top scored categories than either cat5 or cat7 (10.4% of the time versus 16% and 14.1%, respectively). This would seem to show that other items that code for cat5 counterbalance the frequent positive responses to q35.
+
+THe following items skew especially low:
+<ul>
+  <li>q17</li>
+  <li>q31</li>
+  <li>q53</li>
+</ul>
+
+q17 codes for cat1. q31 codes for cat2. q53 codes for both cat2 and cat9. cat1, cat2 and cat9 are the categories most likely to appear in a respondent's bottom three categories.
+
+
+
+#### 7 Point Item Distribution Analysis
+
+```{r echo=FALSE}
+
+
+#add id row
+sevenPt$id <- 1:dim(sevenPt)[1]
+
+#make long fivePt data
+sevenPtLong <- melt(sevenPt, id=c("id"))
+
+
+
+ggplot(sevenPtLong, aes(x=variable, y=value)) +
+  geom_boxplot(outlier.colour='#5F6062', outlier.shape=16,
+             outlier.size=2, notch=FALSE, fill='#009DA6', alpha=.1,
+             fatten=3) + 
+  stat_summary(fun.y=mean, colour="#DD4243", geom="point")
+
+```
+
+As with the five point scale items on the survey, respondents are more likely to rate themselves highly than lowly on seven point scale items. This is demonstrated by the fact that the median response for most items is five out of seven. A neutral response is represented by four. 
+
+One item has an especially low variance among all responses:
+<ul>
+  <li>q12</li>
+</ul>
+For this item, respondents were highly likely to mark four of five. This item codes for cat1. 
+
+Five items have a lower median than the other items. Two of these five have a median response of 3 :
+<ul>
+  <li>q16</li>
+  <li>q30</li>
+  <li>q36</li>
+  <li>q40</li>
+  <li>q52</li>
+</ul>
+These questions code for cat1 (q16), cat2 (q30, q52), cat5 (q36), cat6 (q36, q40), and cat9 (q52). The questions in this set coding for cat1 and cat2 have the lowest median response.
+
+q36 seems to be the item that counterbalances the average positive response to q35 (see previous sub-section). The other items in this group represent (code for) the four categories most commonly in respondents' bottom three categories (cat2, cat1, cat9, and cat6).
+
+
+### Composite Item Distribution by cat
+
+```{r include = FALSE}
+
+#some questions code for more than one cat
+
+#create new column for each cat as row average of questions that code fro that cat
+#we don't want to take any means because we're trying to visualize distribution
+fivePtCat1 <- subset(fivePt, select=c(q13, q15, q17))
+fivePtCat2 <- subset(fivePt, select=c(q19, q21, q23))
+fivePtCat3 <- subset(fivePt, select=c(q25, q27))
+fivePtCat4 <- subset(fivePt, select=c(q29, q31, q53))
+fivePtCat5 <- subset(fivePt, select=c(q33, q35, q37))
+fivePtCat6 <- subset(fivePt, select=c(q37, q39, q41))
+fivePtCat7 <- subset(fivePt, select=c(q43, q45))
+fivePtCat8 <- subset(fivePt, select= c(q47, q49))
+fivePtCat9 <- subset(fivePt,select=c(q51, q53, q55))
+fivePtCat10 <- subset(fivePt, select=c(q47, q59))
+
+#crate time saving find a replace
+#use ctrl + shift + c to comment out block
+
+# string <- "fivePtCat1 <- subset(fivePt, select=c(q13, q15, q17))
+# fivePtCat2 <- subset(fivePt, select=c(q19, q21, q23))
+# fivePtCat3 <- subset(fivePt, select=c(q25, q27))
+# fivePtCat4 <- subset(fivePt, select=c(q29, q31, q53))
+# fivePtCat5 <- subset(fivePt, select=c(q33, q35, q37))
+# fivePtCat6 <- subset(fivePt, select=c(q37, q39, q41))
+# fivePtCat7 <- subset(fivePt, select=c(q43, q45))
+# fivePtCat8 <- subset(fivePt, select= c(q47, q49))
+# fivePtCat9 <- subset(fivePt,select=c(q51, q53, q55))
+# fivePtCat10 <- subset(fivePt, select=c(q47, q59))"
+
+
+
+#newstring <- gsub("fivePt", "sevenPt", string)
+
+sevenPtCat1 <- subset(sevenPt, select=c(q12, q14, q16))
+sevenPtCat2 <- subset(sevenPt, select=c(q18, q20, q22))
+sevenPtCat3 <- subset(sevenPt, select=c(q24, q26))
+sevenPtCat4 <- subset(sevenPt, select=c(q28, q30, q52))
+sevenPtCat5 <- subset(sevenPt, select=c(q32, q34, q36))
+sevenPtCat6 <- subset(sevenPt, select=c(q36, q38, q40))
+sevenPtCat7 <- subset(sevenPt, select=c(q42, q44))
+sevenPtCat8 <- subset(sevenPt, select= c(q46, q48))
+sevenPtCat9 <- subset(sevenPt, select=c(q50, q52, q54))
+sevenPtCat10 <- subset(sevenPt, select=c(q46, q58))
+
+
+#add column with cat name
+fivePtCat1$cat <- "cat1"
+fivePtCat2$cat <- "cat2"
+fivePtCat3$cat <- "cat3"
+fivePtCat4$cat <- "cat4"
+fivePtCat5$cat <- "cat5"
+fivePtCat6$cat <- "cat6"
+fivePtCat7$cat <- "cat7"
+fivePtCat8$cat <- "cat8"
+fivePtCat9$cat <-"cat9"
+fivePtCat10$cat <-"cat10"
+
+
+sevenPtCat1$cat <- "cat1"
+sevenPtCat2$cat <- "cat2"
+sevenPtCat3$cat <- "cat3"
+sevenPtCat4$cat <- "cat4"
+sevenPtCat5$cat <- "cat5"
+sevenPtCat6$cat <- "cat6"
+sevenPtCat7$cat <- "cat7"
+sevenPtCat8$cat <- "cat8"
+sevenPtCat9$cat <-"cat9"
+sevenPtCat10$cat <-"cat10"
+
+#make long fivePt data
+fivePtCat1 <- melt(fivePtCat1, id = c("cat"))
+fivePtCat2 <- melt(fivePtCat2, id = c("cat"))
+fivePtCat3 <- melt(fivePtCat3, id=c("cat"))
+fivePtCat4 <- melt(fivePtCat4, id=c("cat"))
+fivePtCat5 <- melt(fivePtCat5, id=c("cat"))
+fivePtCat6 <- melt(fivePtCat6, id=c("cat"))
+fivePtCat7 <- melt(fivePtCat7, id=c("cat"))
+fivePtCat8 <- melt(fivePtCat8, id=c("cat"))
+fivePtCat9 <-melt(fivePtCat9, id=c("cat"))
+fivePtCat10 <-melt(fivePtCat10, id=c("cat"))
+
+
+#make long sevenPt data
+sevenPtCat1 <- melt(sevenPtCat1, id = c("cat"))
+sevenPtCat2 <- melt(sevenPtCat2, id = c("cat"))
+sevenPtCat3 <- melt(sevenPtCat3, id=c("cat"))
+sevenPtCat4 <- melt(sevenPtCat4, id=c("cat"))
+sevenPtCat5 <- melt(sevenPtCat5, id=c("cat"))
+sevenPtCat6 <- melt(sevenPtCat6, id=c("cat"))
+sevenPtCat7 <- melt(sevenPtCat7, id=c("cat"))
+sevenPtCat8 <- melt(sevenPtCat8, id=c("cat"))
+sevenPtCat9 <-melt(sevenPtCat9, id=c("cat"))
+sevenPtCat10 <-melt(sevenPtCat10, id=c("cat"))
+
+#bind together into super long data
+fivePtCompLong <- rbind(fivePtCat1, fivePtCat2, fivePtCat3, fivePtCat4, fivePtCat5,
+                       fivePtCat6, fivePtCat7, fivePtCat8, fivePtCat9, fivePtCat10)
+
+sevenPtCompLong <- rbind(sevenPtCat1, sevenPtCat2, sevenPtCat3, sevenPtCat4, sevenPtCat5,
+                       sevenPtCat6, sevenPtCat7, sevenPtCat8, sevenPtCat9, sevenPtCat10)
+
+
+```
+
+
+Each item in the survey codes for one or more categories. This section explores the distribution of composite scores for each category 
+
+#### Five Point Composite Item Distribution Analysis
+
+Chart is arranged in descending order of mean composite item value.
+
+```{r echo=FALSE}
+ggplot(fivePtCompLong, aes(x=reorder(cat, -value, mean, na.rm=TRUE), y=value)) +
+  geom_boxplot(outlier.colour='#5F6062', outlier.shape=16,
+             outlier.size=2, notch=FALSE, fill='#009DA6', alpha=.1,
+             fatten=3) + 
+  stat_summary(fun.y=mean, colour="#DD4243", geom="point") +
+  theme(axis.text.x = element_text(angle = 45, hjust=1, 
+                                   size = 9))
+  
+```
+```{r echo=FALSE}
+#create table with mean of each cat on right hand side. makes easier comparison to top categories ranking
+
+#order table by mean, descending
+
+
+fivePtCompLong %>% group_by(cat) %>%
+  summarize(mean = round(mean(value, na.rm=TRUE),2)) %>%
+  arrange(desc(mean))
+
+
+```
+
+The descending mean as rank position of the composite five point scores exactly matches the frequency that each category occurs in the first, second, or third position of a respondent's ranked categories with the exception of cat9. While cat9 least frequently occurs as a respondent's top cat, in this rank order, cat9 falls in the third to last position. This would seem to say that respondents on average mark higher responses on 5 point scale items cat9 than they report on 7 point cat9 activities. That is, the self-reported scores that respondents give for 7 point items pulls the overall cat9 scores down.
+
+#### 7 point Composite Item Distribution Analysis
+
+Chart is arranged in descending order of mean composite item value.
+
+
+```{r echo=FALSE}
+ggplot(sevenPtCompLong, aes(x=reorder(cat, -value, mean, na.rm=TRUE), y=value)) +
+  geom_boxplot(outlier.colour='#5F6062', outlier.shape=16,
+             outlier.size=2, notch=FALSE, fill='#009DA6', alpha=.1,
+             fatten=3) + 
+  stat_summary(fun.y=mean, colour="#DD4243", geom="point") +
+  theme(axis.text.x = element_text(angle = 45, hjust=1, 
+                                   size = 9))
+```
+```{r echo=FALSE}
+#create table with mean of each cat on right hand side. makes easier comparison to top categories ranking
+
+#order table by mean, descending
+
+
+sevenPtCompLong %>% group_by(cat) %>%
+  summarize(mean = round(mean(value, na.rm=TRUE),2)) %>%
+  arrange(desc(mean))
+
+
+```
+
+Comparing the two composite distributions, it is easy to see that five point scale answers and seven point scale answers are closely correlated. 
+
+However, the rank order of composite seven point scores compared to the distribution of top categories is very different. cat8 is ranked number 1 in 7 point scores, but number 3 in top categories. cat10 is number three in 7 point scores, but sixth in top categories. cat5, on the other hand, moves in the opposite direction: ranked fifth in 7 point scores but first in top categories. These results show that respondents are likely to report more favorably (higher) on five point scale cat8 items, but are less likely to report so highly on seven point cat8 items The same holds true with cat10 items (Note this analysis concerns only aggregate. These findings may or may not hold up within each respondent's results.) For cat5 items, respondents tend to respond very favoriably to seven point scale items, but more moderately on five point scale items. 
+
+
+
+## Deviating Questions
+
+In this section, scores for each respondent are represented as compared to the respondent's central tendency (as z-scores). 
+
+
+```{r include=FALSE}
+
+#remove id row from questions data
+fivePtC <- subset(fivePt, select= -c(id))
+sevenPtC <- subset(sevenPt, select= -c(id))
+
+
+
+#transpose data so each column is a respondent
+tfivePtC <- as.data.frame(t(as.matrix(fivePtC)))
+tsevenPtC <- as.data.frame(t(as.matrix(sevenPtC)))
+
+#create new dataset with each column scaled (z-scores)
+#scale defaults to columns
+fivePtZDataC <- as.data.frame(scale(as.matrix(tfivePtC)))
+sevenPtZDataC <- as.data.frame(scale(as.matrix(tsevenPtC))) 
+
+
+#some rows are NA because SD was 0
+# fivePtZDataC_naOmit <- na.omit(fivePtZDataC)
+# sevenPtZDataC_naOmit <- na.omit(sevenPtZDataC)
+# 
+# dim(fivePtZDataC_naOmit)[1]
+
+
+
+#need to transpose back before we melt
+fivePtZDataCT <- as.data.frame(t(as.matrix(fivePtZDataC)))
+sevenPtZDataCT <- as.data.frame(t(as.matrix(sevenPtZDataC)))
+
+#now remove NAs
+fivePtZDataCT <- na.omit(fivePtZDataCT)
+sevenPtZDataCT <- na.omit(sevenPtZDataCT)
+
+#add id colmn
+fivePtZDataCT$id <- 1:dim(fivePtZDataCT)[1]
+sevenPtZDataCT$id <- 1:(dim(sevenPtZDataCT)[1])
+
+#make long fivePt data
+fivePtZDataC_Long <- melt(fivePtZDataCT, id=c("id"))
+sevenPtZDataC_Long <- melt(sevenPtZDataCT, id=c("id"))
+
+
+
+
+```
+### Five Point Scale Questions Deviation
+```{r echo=FALSE}
+ggplot(fivePtZDataC_Long, aes(x=variable, y=value)) +
+  geom_boxplot(outlier.colour='#5F6062', outlier.shape=16,
+             outlier.size=2, notch=FALSE, fill='#009DA6', alpha=.1,
+             fatten=3) + 
+  stat_summary(fun.y=mean, colour="#DD4243", geom="point")
+```
+Among five point scale items, respondents tend to deviate most strongly away from their central tendencies on the following items: 
+<ul>
+  <li>q17 (cat1)</li>
+  <li>q31 (cat2)</li>
+  <li>q53 (cat2, cat9)</li>
+</ul>
+
+These are the same items whose raw scores skewed lowest.
+
+
+### Seven Point Scale Item Deviation
+```{r echo=FALSE}
+ggplot(sevenPtZDataC_Long, aes(x=variable, y=value)) +
+  geom_boxplot(outlier.colour='#5F6062', outlier.shape=16,
+             outlier.size=2, notch=FALSE, fill='#009DA6', alpha=.1,
+             fatten=3) + 
+  stat_summary(fun.y=mean, colour="#DD4243", geom="point")
+```
+Among seven point scale items, respondents tend to deviate most strongly away from their central tendencies on the following questions: 
+<ul>
+  <li>q16 (cat1)</li>
+  <li>q30 (cat2) </li>
+  <li>q52 (cat2, cat9)</li>
+</ul>
+
+Much of the variance that appeared in raw scores on q36 and q40 is no longer apparent.
+
+## Composite Category Deviance 
+
+### Composite Item Deviance by Category
+
+```{r include = FALSE}
+#create new column for each cat as row average of questions that code fro that cat
+
+
+
+#we don't want to take any means because we're trying to visualize distribution
+fivePtCat1 <- subset(fivePtZDataCT, select=c(q13, q15, q17))
+fivePtCat2 <- subset(fivePtZDataCT, select=c(q19, q21, q23))
+fivePtCat3 <- subset(fivePtZDataCT, select=c(q25, q27))
+fivePtCat4 <- subset(fivePtZDataCT, select=c(q29, q31, q53))
+fivePtCat5 <- subset(fivePtZDataCT, select=c(q33, q35, q37))
+fivePtCat6 <- subset(fivePtZDataCT, select=c(q37, q39, q41))
+fivePtCat7 <- subset(fivePtZDataCT, select=c(q43, q45))
+fivePtCat8 <- subset(fivePtZDataCT, select= c(q47, q49))
+fivePtCat9 <- subset(fivePtZDataCT,select=c(q51, q53, q55))
+fivePtCat10 <- subset(fivePtZDataCT, select=c(q47, q59))
+
+#crate time saving find a replace
+#use ctrl + shift + c to comment out block
+
+# string <- "fivePtCat1 <- subset(fivePt, select=c(q13, q15, q17))
+# fivePtCat2 <- subset(fivePt, select=c(q19, q21, q23))
+# fivePtCat3 <- subset(fivePt, select=c(q25, q27))
+# fivePtCat4 <- subset(fivePt, select=c(q29, q31, q53))
+# fivePtCat5 <- subset(fivePt, select=c(q33, q35, q37))
+# fivePtCat6 <- subset(fivePt, select=c(q37, q39, q41))
+# fivePtCat7 <- subset(fivePt, select=c(q43, q45))
+# fivePtCat8 <- subset(fivePt, select= c(q47, q49))
+# fivePtCat9 <- subset(fivePt,select=c(q51, q53, q55))
+# fivePtCat10 <- subset(fivePt, select=c(q47, q59))"
+
+
+
+#newstring <- gsub("fivePt", "sevenPt", string)
+
+sevenPtCat1 <- subset(sevenPtZDataCT, select=c(q12, q14, q16))
+sevenPtCat2 <- subset(sevenPtZDataCT, select=c(q18, q20, q22))
+sevenPtCat3 <- subset(sevenPtZDataCT, select=c(q24, q26))
+sevenPtCat4 <- subset(sevenPtZDataCT, select=c(q28, q30, q52))
+sevenPtCat5 <- subset(sevenPtZDataCT, select=c(q32, q34, q36))
+sevenPtCat6 <- subset(sevenPtZDataCT, select=c(q36, q38, q40))
+sevenPtCat7 <- subset(sevenPtZDataCT, select=c(q42, q44))
+sevenPtCat8 <- subset(sevenPtZDataCT, select= c(q46, q48))
+sevenPtCat9 <- subset(sevenPtZDataCT, select=c(q50, q52, q54))
+sevenPtCat10 <- subset(sevenPtZDataCT, select=c(q46, q58))
+
+
+#add column with cat name
+fivePtCat1$cat <- "cat1"
+fivePtCat2$cat <- "cat2"
+fivePtCat3$cat <- "cat3"
+fivePtCat4$cat <- "cat4"
+fivePtCat5$cat <- "cat5"
+fivePtCat6$cat <- "cat6"
+fivePtCat7$cat <- "cat7"
+fivePtCat8$cat <- "cat8"
+fivePtCat9$cat <-"cat9"
+fivePtCat10$cat <-"cat10"
+
+
+sevenPtCat1$cat <- "cat1"
+sevenPtCat2$cat <- "cat2"
+sevenPtCat3$cat <- "cat3"
+sevenPtCat4$cat <- "cat4"
+sevenPtCat5$cat <- "cat5"
+sevenPtCat6$cat <- "cat6"
+sevenPtCat7$cat <- "cat7"
+sevenPtCat8$cat <- "cat8"
+sevenPtCat9$cat <-"cat9"
+sevenPtCat10$cat <-"cat10"
+
+#make long fivePt data
+fivePtCat1 <- melt(fivePtCat1, id = c("cat"))
+fivePtCat2 <- melt(fivePtCat2, id = c("cat"))
+fivePtCat3 <- melt(fivePtCat3, id=c("cat"))
+fivePtCat4 <- melt(fivePtCat4, id=c("cat"))
+fivePtCat5 <- melt(fivePtCat5, id=c("cat"))
+fivePtCat6 <- melt(fivePtCat6, id=c("cat"))
+fivePtCat7 <- melt(fivePtCat7, id=c("cat"))
+fivePtCat8 <- melt(fivePtCat8, id=c("cat"))
+fivePtCat9 <-melt(fivePtCat9, id=c("cat"))
+fivePtCat10 <-melt(fivePtCat10, id=c("cat"))
+
+
+#make long sevenPt data
+sevenPtCat1 <- melt(sevenPtCat1, id = c("cat"))
+sevenPtCat2 <- melt(sevenPtCat2, id = c("cat"))
+sevenPtCat3 <- melt(sevenPtCat3, id=c("cat"))
+sevenPtCat4 <- melt(sevenPtCat4, id=c("cat"))
+sevenPtCat5 <- melt(sevenPtCat5, id=c("cat"))
+sevenPtCat6 <- melt(sevenPtCat6, id=c("cat"))
+sevenPtCat7 <- melt(sevenPtCat7, id=c("cat"))
+sevenPtCat8 <- melt(sevenPtCat8, id=c("cat"))
+sevenPtCat9 <-melt(sevenPtCat9, id=c("cat"))
+sevenPtCat10 <-melt(sevenPtCat10, id=c("cat"))
+
+#bind together into super long data
+fivePtCompLong <- rbind(fivePtCat1, fivePtCat2, fivePtCat3, fivePtCat4, fivePtCat5,
+                       fivePtCat6, fivePtCat7, fivePtCat8, fivePtCat9, fivePtCat10)
+
+sevenPtCompLong <- rbind(sevenPtCat1, sevenPtCat2, sevenPtCat3, sevenPtCat4, sevenPtCat5,
+                       sevenPtCat6, sevenPtCat7, sevenPtCat8, sevenPtCat9, sevenPtCat10)
+
+
+```
+
+### Five Point Scale Item Composite Deviation
+
+```{r echo=FALSE}
+ggplot(fivePtCompLong, aes(x=reorder(cat, -value, mean, na.rm=TRUE), y=value)) +
+  geom_boxplot(outlier.colour='#5F6062', outlier.shape=16,
+             outlier.size=2, notch=FALSE, fill='#009DA6', alpha=.1,
+             fatten=3) + 
+  stat_summary(fun.y=mean, colour="#DD4243", geom="point") +
+  theme(axis.text.x = element_text(angle = 45, hjust=1, 
+                                   size = 9))
+  
+```
+
+In the above plot, the most notable categories are those at the tails because they represent the categories whose average answer deviates the most from a respondent's central tendency. On average, respondents tend to answer five point scale cat5 items positively away from the central tendency. On average, respondents tend to answer five point scale cat2 items negatively away from their central tendency.
+
+### Seven Point Scale Items Composite Deviation
+
+```{r echo=FALSE}
+ggplot(sevenPtCompLong, aes(x=reorder(cat, -value, mean, na.rm=TRUE), y=value)) +
+  geom_boxplot(outlier.colour='#5F6062', outlier.shape=16,
+             outlier.size=2, notch=FALSE, fill='#009DA6', alpha=.1,
+             fatten=3) + 
+  stat_summary(fun.y=mean, colour="#DD4243", geom="point") +
+  theme(axis.text.x = element_text(angle = 45, hjust=1, 
+                                   size = 9))
+```
+
+As with the five point scale composite plot, the most notable distributions in the above plot are those at the tails. Respondents tend to answer seven point cat8 items positively away from their central tendency, but seven point scale cat2 items negatively away from their central tendency. cat2 and cat5 have the largest distribution. 
+
+### Category Composites
+
+```{r include = FALSE}
+#need to combine the manipulated scores and  for cat scores
+
+
+#r bind both long comps together 
+allItemComp <- rbind(sevenPtCompLong, fivePtCompLong)
+
+```
+```{r echo=FALSE}
+ggplot(allItemComp, aes(x=reorder(cat, -value, mean, na.rm=TRUE), y=value)) +
+  geom_boxplot(outlier.colour='#5F6062', outlier.shape=16,
+             outlier.size=2, notch=FALSE, fill='#009DA6', alpha=.1,
+             fatten=3) + 
+  stat_summary(fun.y=mean, colour="#DD4243", geom="point") +
+  theme(axis.text.x = element_text(angle = 45, hjust=1, 
+                                   size = 9))
+```
+
+It is sensical that this distribution in no way reflects the actual distribution of top categories. This data is showing only the distribution of respondent answers per item composite against the respondent's central tendency. On average, respondents tend to answer cat7 items above their central tendency. On average, respondents tend to answer cat2 items below their central tendency. 
+
+
+### Summary
+
+In this summary of distribution statistics, the category for which an item codes is listed after the question.
+
+Distribution statistics reveal that several item clusters (both seven point scale and five point scale itemss coding for the same category) are subject to greater variance. For the following items, both the seven point scale and five point scale items have an above average standard deviation:
+<ul>
+  <li>Q16 and Q17 (cat1)</li>
+  <li>Q30 and Q31 (cat2)</li>
+  <li>Q32 and Q33 (cat5)</li>
+  <li>Q36 and Q37 (cat5, cat6)</li>
+</ul>
+
+There are three items which respondents tend to rate higher than other items. On these items, the standard deviation is low (signified by *) or average.
+<ul>
+  <li>Q27 (cat5)</li>
+  <li>Q34 (cat5)</li>
+  <li>Q35* (cat5)</li>
+</ul>
+
+For the following item clusters, respondents tend to rate themselves lower than other items. For these items, however, the standard deviation is higher than for other items. These items tend to garner varied responses. 
+<ul>
+  <li>Q16 and Q17 (cat1)/li>
+  <li>Q30 and Q31 (cat2)</li>
+  <li>Q52 and Q53 (cat2, cat9) (The standard deviation for Q53 is average)</li>
+</ul>
+
+For the purpose of understanding how item bias might introduce error into the survey, it is interesting to note that item clusters coding for categoreis cat1, cat2 and cat9 have high volatility as these three categories occur most frequently among respondents' bottom three categories. It is predictable that, for two of these clusters of items, the means are also lower than average (cat1 and cat2). 
+
+Two item clusters that code for cat5 have anomalous distribution statistics: Q32 and Q33, and Q36 and Q37. cat5 appears in respondents' top three categories with almost median frequency. Likewise, cat5 appears in respondents' bottom three categories with almost median frequency.
+
+
+cat5 represents a surprisingly divisive topic. Compared to other catilties, when it comes to cat5 questions, respondents tend to vary a little more. 
+
+<br>
+
+
+
+
+
+## Conclusion
+cat1, cat2, and cat5 show slight evidence of some social undesirability/desirability bias.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
